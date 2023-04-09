@@ -143,13 +143,13 @@ private:
 
 class GFXcanvas: public FastLED_GFX {
 public:
-  GFXcanvas(uint16_t w, uint16_t h);
+  GFXcanvas(uint16_t w, uint16_t h, void (*_set_funcp)(uint16_t x, uint16_t y,const struct CRGB & color));
   ~GFXcanvas(void);
   void drawPixel(int16_t x, int16_t y, CRGB color);
-  void fillScreen(CRGB color);
-  struct CRGB *getBuffer(void);
+  //void fillScreen(CRGB color);
+  //struct CRGB *getBuffer(void);
 private:
-  struct CRGB *m_LED;
+  void (*set_funcp)(uint16_t x, uint16_t y,const struct CRGB & color);
 };
 
 #endif // _FASTLED_GFX_H

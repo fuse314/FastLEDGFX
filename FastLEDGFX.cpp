@@ -39,7 +39,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 */
 #include <FastLED.h>
-#include "FastLED_GFX.h"
+#include "FastLEDGFX.h"
 #include "glcdfont.c"
 #ifdef __AVR__
  #include <avr/pgmspace.h>
@@ -927,19 +927,23 @@ boolean FastLED_GFX_Button::justReleased() { return (!currstate && laststate); }
 // GFXcanvas requires 2 bytes per pixel (no scanline pad).
 // NOT EXTENSIVELY TESTED YET.  MAY CONTAIN WORST BUGS KNOWN TO HUMANKIND.
 
-GFXcanvas::GFXcanvas(uint16_t w, uint16_t h) : FastLED_GFX(w, h) {
-  struct CRGB p_LED[(w * h)];
-  m_LED = p_LED;
+GFXcanvas::GFXcanvas(uint16_t w, uint16_t h, void (*_set_funcp)(uint16_t x, uint16_t y,const struct CRGB & color)) : FastLED_GFX(w, h) {
+  set_funcp = _set_funcp;
 }
 
 GFXcanvas::~GFXcanvas(void) {
 }
 
-struct CRGB* GFXcanvas::getBuffer() {
-  return (&m_LED[0]);
-}
+// struct CRGB* GFXcanvas::getBuffer() {
+//   return (&m_LED[0]);
+// }
 
 void GFXcanvas::drawPixel(int16_t x, int16_t y, CRGB color) {
+  //gma
+  // special handling:
+  // allow wrapping around of content once
+  if(x >= _width) { x -= _width; }
+  
   if((x < 0) || (y < 0) || (x >= _width) || (y >= _height)) return;
 
   int16_t t;
@@ -960,10 +964,10 @@ void GFXcanvas::drawPixel(int16_t x, int16_t y, CRGB color) {
     break;
   }
 
-  m_LED[x + y * WIDTH] = color;
+  set_funcp(x,y,color);
 }
 
-void GFXcanvas::fillScreen(CRGB color) {
-  uint16_t i, pixels = WIDTH * HEIGHT;
-  for(i=0; i<pixels; i++) m_LED[i] = color;
-}
+// void GFXcanvas::fillScreen(CRGB color) {
+//   uint16_t i, pixels = WIDTH * HEIGHT;
+//   for(i=0; i<pixels; i++) m_LED[i] = color;
+// }
