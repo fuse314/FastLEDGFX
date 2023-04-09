@@ -49,9 +49,30 @@ POSSIBILITY OF SUCH DAMAGE.
  #define pgm_read_pointer(addr) ((void *)pgm_read_dword(addr))
 #else
  #define pgm_read_byte(addr) (*(const unsigned char *)(addr))
+ #ifndef pgm_read_word
  #define pgm_read_word(addr) (*(const unsigned short *)(addr))
- #define pgm_read_pointer(addr) ((void *)pgm_read_word(addr))
+ #endif
+ #ifndef pgm_read_dword
+ #define pgm_read_dword(addr) (*(const unsigned long *)(addr))
+ #endif
+ #if !defined(__INT_MAX__) || (__INT_MAX__ > 0xFFFF)
+  #define pgm_read_pointer(addr) ((void *)pgm_read_dword(addr))
+ #else
+  #define pgm_read_pointer(addr) ((void *)pgm_read_word(addr))
+ #endif
 #endif
+
+inline GFXglyph *pgm_read_glyph_ptr(const GFXfont *gfxFont, uint8_t c) {
+  #ifdef __AVR__
+    return &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
+  #else
+  // expression in __AVR__ section may generate "dereferencing type-punned
+  // pointer will break strict-aliasing rules" warning In fact, on other
+  // platforms (such as STM32) there is no need to do this pointer magic as
+  // program memory may be read in a usual way So expression may be simplified
+  return gfxFont->glyph + c;
+#endif //__AVR__
+}
 
 #ifndef min
 #define min(a,b) (((a) < (b)) ? (a) : (b))
@@ -355,7 +376,7 @@ void FastLED_GFX::fillTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 // foreground color (unset bits are transparent).
 void FastLED_GFX::drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, CRGB color) {
   int16_t i, j, byteWidth = (w + 7) / 8;
-  uint8_t byte;
+  uint8_t byte = 0;
 
   for(j=0; j<h; j++) {
     for(i=0; i<w; i++) {
@@ -371,7 +392,7 @@ void FastLED_GFX::drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_
 // foreground (for set bits) and background (for clear bits) colors.
 void FastLED_GFX::drawBitmap(int16_t x, int16_t y, const uint8_t *bitmap, int16_t w, int16_t h, CRGB color, CRGB bg) {
   int16_t i, j, byteWidth = (w + 7) / 8;
-  uint8_t byte;
+  uint8_t byte = 0;
 
   for(j=0; j<h; j++) {
     for(i=0; i<w; i++ ) {
@@ -388,7 +409,7 @@ void FastLED_GFX::drawBitmap(int16_t x, int16_t y,
  uint8_t *bitmap, int16_t w, int16_t h, CRGB color) {
 
   int16_t i, j, byteWidth = (w + 7) / 8;
-  uint8_t byte;
+  uint8_t byte = 0;
 
   for(j=0; j<h; j++) {
     for(i=0; i<w; i++ ) {
@@ -404,7 +425,7 @@ void FastLED_GFX::drawBitmap(int16_t x, int16_t y,
  uint8_t *bitmap, int16_t w, int16_t h, CRGB color, CRGB bg) {
 
   int16_t i, j, byteWidth = (w + 7) / 8;
-  uint8_t byte;
+  uint8_t byte = 0;
 
   for(j=0; j<h; j++) {
     for(i=0; i<w; i++ ) {
@@ -423,7 +444,7 @@ void FastLED_GFX::drawXBitmap(int16_t x, int16_t y,
  const uint8_t *bitmap, int16_t w, int16_t h, CRGB color) {
 
   int16_t i, j, byteWidth = (w + 7) / 8;
-  uint8_t byte;
+  uint8_t byte = 0;
 
   for(j=0; j<h; j++) {
     for(i=0; i<w; i++ ) {
@@ -466,7 +487,7 @@ void FastLED_GFX::write(uint8_t c) {
       uint8_t first = pgm_read_byte(&gfxFont->first);
       if((c >= first) && (c <= (uint8_t)pgm_read_byte(&gfxFont->last))) {
         uint8_t   c2    = c - pgm_read_byte(&gfxFont->first);
-        GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c2]);
+        GFXglyph *glyph = pgm_read_glyph_ptr(gfxFont, c2); // &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c2]);
         uint8_t   w     = pgm_read_byte(&glyph->width),
                   h     = pgm_read_byte(&glyph->height);
         if((w > 0) && (h > 0)) { // Is there an associated bitmap?
@@ -525,17 +546,16 @@ void FastLED_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
     // directly with 'bad' characters of font may cause mayhem!
 
     c -= pgm_read_byte(&gfxFont->first);
-    GFXglyph *glyph  = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
+    GFXglyph *glyph  = pgm_read_glyph_ptr(gfxFont, c); // &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
     uint8_t  *bitmap = (uint8_t *)pgm_read_pointer(&gfxFont->bitmap);
 
     uint16_t bo = pgm_read_word(&glyph->bitmapOffset);
     uint8_t  w  = pgm_read_byte(&glyph->width),
-             h  = pgm_read_byte(&glyph->height),
-             xa = pgm_read_byte(&glyph->xAdvance);
+             h  = pgm_read_byte(&glyph->height);
     int8_t   xo = pgm_read_byte(&glyph->xOffset),
              yo = pgm_read_byte(&glyph->yOffset);
-    uint8_t  xx, yy, bits, bit = 0;
-    int16_t  xo16, yo16;
+    uint8_t  xx, yy, bits = 0, bit = 0;
+    int16_t  xo16 = 0, yo16 = 0;
 
     if(size > 1) {
       xo16 = xo;
@@ -682,7 +702,7 @@ void FastLED_GFX::getTextBounds(char *str, int16_t x, int16_t y,
         if(c != '\r') { // Not a carriage return, is normal char
           if((c >= first) && (c <= last)) { // Char present in current font
             c    -= first;
-            glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
+            glyph = pgm_read_glyph_ptr(gfxFont, c); // &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
             gw    = pgm_read_byte(&glyph->width);
             gh    = pgm_read_byte(&glyph->height);
             xa    = pgm_read_byte(&glyph->xAdvance);
@@ -771,7 +791,7 @@ void FastLED_GFX::getTextBounds(const __FlashStringHelper *str,
         if(c != '\r') { // Not a carriage return, is normal char
           if((c >= first) && (c <= last)) { // Char present in current font
             c    -= first;
-            glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
+            glyph = pgm_read_glyph_ptr(gfxFont, c); // &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
             gw    = pgm_read_byte(&glyph->width);
             gh    = pgm_read_byte(&glyph->height);
             xa    = pgm_read_byte(&glyph->xAdvance);
